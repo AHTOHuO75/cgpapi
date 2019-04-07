@@ -3,16 +3,19 @@
 
 import sys
 import socket
+import ssl
+import re
+import hashlib
 from pprint import pprint
 
 
 class Cli:
-
-	CLI_CODE={
+	CLI_CODE = {
 		'OK': '200',
 		'OK_INLINE': '201',
 		'PASSWORD': '300',
-		'UNKNOW_USER': '500',
+		'UNKNOWN_USER': '500',
+		'INCORRECT_P_A': '515',
 		'GEN_ERR': '501',
 		'STRANGE': '10000'
 	}
@@ -32,42 +35,66 @@ class Cli:
 		try:
 			self.connection_parms['user'] = connection_parms['user']
 		except KeyError:
-			print("User is not defined")
+			sys.stderr.write("User is not defined")
 			exit(1)
 		try:
 			self.connection_parms['password'] = connection_parms['password']
 		except KeyError:
-			print("Password is not defined")
+			sys.stderr.write("Password is not defined")
 			exit(1)
 		self.connection_parms.update(connection_parms)
 		try:
 			self.sock = socket.socket()
 		except socket.error:
-			print('Failed to create socket')
+			sys.stderr.write('Failed to create socket')
 			sys.exit()
 		self.sock.settimeout(self.connection_parms['timeout'])
 		self.sock.connect((self.connection_parms['host'], self.connection_parms['port']))
-		response = self.sock.recv(1024)
-		pprint(response)
+		result = self.sock.recv(1024)
+		if self.getclicode(result) != self.CLI_CODE['OK']:
+			print("Connect response code is not OK")
+			sys.exit(1)
+		self.sessionid = re.findall('(\<.*\@.*\>)', result)
 		if self.connection_parms['ssl_transport']:
-			pass
+			pprint(self.send2cli("STLS"))
+			#context = ssl._create_unverified_context(protocol=ssl.PROTOCOL_TLS)
+			context = ssl._create_stdlib_context()
+			conn = context.wrap_socket(self.sock, server_hostname = "test.esrr.rzd")
+			conn.connect(("test.esrr.rzd", 443))
+			conn.sendall(bytes("USER postmaster"))
 		else:
 			pass
 		if self.connection_parms['secure_login']:
-			pass
+			md5 = hashlib.md5()
+			md5.update(self.sessionid[0])
+			md5.update(self.connection_parms['password'])
+			self.check_response(self.send2cli("APOP "+self.connection_parms['user']+" "+md5.hexdigest())[0], "APOP")
 		elif self.connection_parms['webuser_login']:
 			pass
+			self.check_response(self.send2cli("AUTH WEBUSER " + self.connection_parms['user'] + " " + self.connection_parms['password']), "AUTH WEBUSER")
 		else:
-			pass
-			print self.send2cli("USER " + self.connection_parms['user'])
-			print self.send2cli("PASS " + self.connection_parms['password'])
+			if self.send2cli("USER " + self.connection_parms['user'])[0] != self.CLI_CODE['PASSWORD']:
+				sys.stderr.write("USER response code is not PASSWORD")
+				sys.exit(1)
+			self.check_response(self.send2cli("PASS " + self.connection_parms['password']), "PASS")
+
 	def __del__(self):
 		self.sock.close()
+
+	def getclicode(self, response):
+		return re.findall('^(\d+)', response)[0]
 
 	def send2cli(self, command):
 		try:
 			self.sock.sendall(bytes(command + "\r\n"))
 		except socket.error:
-			print("send2cli <"+command+"> failed")
+			sys.stderr.write("send2cli <" + command + "> failed")
 			sys.exit()
-		return self.sock.recv(1024)
+		result = self.sock.recv(1024)
+		pprint("send2cli("+command+"): "+result)
+		return (self.getclicode(result),result)
+
+	def check_response(self, response, module):
+		if response != self.CLI_CODE['OK']:
+			sys.stderr.write(module + " response code is " + response[0])
+			sys.exit(1)

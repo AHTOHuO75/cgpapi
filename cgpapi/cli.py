@@ -57,11 +57,7 @@ class Cli:
 		self.sessionid = re.findall('(\<.*\@.*\>)', result)
 		if self.connection_parms['ssl_transport']:
 			pprint(self.send2cli("STLS"))
-			#context = ssl._create_unverified_context(protocol=ssl.PROTOCOL_TLS)
-			context = ssl._create_stdlib_context()
-			conn = context.wrap_socket(self.sock, server_hostname = "test.esrr.rzd")
-			conn.connect(("test.esrr.rzd", 443))
-			conn.sendall(bytes("USER postmaster"))
+			self.sock=ssl.wrap_socket(self.sock)
 		else:
 			pass
 		if self.connection_parms['secure_login']:

@@ -8,10 +8,12 @@ def main():
         'user': 'postmaster',
         'password': 'password',
         'ssl_transport': True,
+        'secure_login': True,
+        'webuser_login': False
     }
 
-    connection = cgpapi.Cli(conn_parm)
-
+    cli = cgpapi.Cli(conn_parm)
+    cli.ListDomainObjects("krwtest.rzd", 20, "", "ACCOUNTS ALIASES FORWARDERS")
 
 if __name__ == '__main__':
     main()

@@ -43,6 +43,9 @@ class Cli:
             sys.stderr.write("Password is not defined")
             exit(1)
         self.connection_parms.update(connection_parms)
+        if self.connection_parms['secure_login'] and self.connection_parms['webuser_login']:
+            sys.stderr.write("You should enable only one of <secure_login> and <webuser_login>")
+            exit(1)
         try:
             self.sock = socket.socket()
         except socket.error:
@@ -56,7 +59,7 @@ class Cli:
             sys.exit(1)
         self.sessionid = re.findall('(\<.*\@.*\>)', result)
         if self.connection_parms['ssl_transport']:
-            self.check_response(self.send2cli("STLS")[0],"STLS")
+            self.check_response(self.send2cli("STLS"),"STLS")
             self.sock = ssl.wrap_socket(self.sock)
         else:
             pass
@@ -64,7 +67,7 @@ class Cli:
             md5 = hashlib.md5()
             md5.update(self.sessionid[0])
             md5.update(self.connection_parms['password'])
-            self.check_response(self.send2cli("APOP "+self.connection_parms['user']+" "+md5.hexdigest())[0], "APOP")
+            self.check_response(self.send2cli("APOP "+self.connection_parms['user']+" "+md5.hexdigest()), "APOP")
         elif self.connection_parms['webuser_login']:
             pass
             self.check_response(self.send2cli("AUTH WEBUSER " + self.connection_parms['user'] + " " + self.connection_parms['password']), "AUTH WEBUSER")
@@ -72,14 +75,21 @@ class Cli:
             if self.send2cli("USER " + self.connection_parms['user'])[0] != self.CLI_CODE['PASSWORD']:
                 sys.stderr.write("USER response code is not PASSWORD")
                 sys.exit(1)
-            self.check_response(self.send2cli("PASS " + self.connection_parms['password'])[0], "PASS")
-        self.check_response(self.send2cli("INLINE")[0], "INLINE")
+            self.check_response(self.send2cli("PASS " + self.connection_parms['password']), "PASS")
+        self.check_response(self.send2cli("INLINE"), "INLINE")
 
     def __del__(self):
-        self.sock.close()
+        try:
+            self.sock.close()
+        except AttributeError:
+            pass
+
 
     def getclicode(self, response):
         return re.findall('^(\d+)', response)[0]
+
+    def getclimessage(self,response):
+        return re.search('^(\d+) (.*)\\r', response).group(2)
 
     def send2cli(self, command):
         try:
@@ -88,10 +98,34 @@ class Cli:
             sys.stderr.write("send2cli <" + command + "> failed")
             sys.exit()
         result = self.sock.recv(1024)
-        #pprint("send2cli("+command+"): "+result)
         return (self.getclicode(result),result)
 
     def check_response(self, response, module):
-        if response != self.CLI_CODE['OK']:
+        if response[0] != self.CLI_CODE['OK']:
             sys.stderr.write(module + " response code is " + response[0])
             sys.exit(1)
+
+    def check_response_inline(self, response, module):
+        if response[0] != self.CLI_CODE['OK_INLINE']:
+            sys.stderr.write(module + " response code is " + response[0])
+            sys.exit(1)
+
+####################################################################
+#    Account commands
+####################################################################
+
+    def ListDomainObjects(self, domain_name, limit, filter="", what="", cookie=""):
+        commandline = "ListDomainObjects "+domain_name
+        if filter != "":
+            commandline += " FILTER "+ filter
+        commandline +=  " " + str(limit)
+        if what != "":
+            commandline += " " + what
+        if cookie != "":
+            commandline += " COOKIE "+ cookie
+        #pprint(commandline)
+        result = self.send2cli(commandline)
+        self.check_response_inline(result,"ListDomainObjects")
+        res=()
+        res = self.getclimessage(result[1])
+        pprint(res)

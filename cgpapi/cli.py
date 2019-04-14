@@ -59,7 +59,7 @@ class Cli:
             sys.exit(1)
         self.sessionid = re.findall('(\<.*\@.*\>)', result)
         if self.connection_parms['ssl_transport']:
-            self.check_response(self.send2cli("STLS"),"STLS")
+            self.check_response(self.send2cli("STLS"), "STLS")
             self.sock = ssl.wrap_socket(self.sock)
         else:
             pass
@@ -67,10 +67,12 @@ class Cli:
             md5 = hashlib.md5()
             md5.update(self.sessionid[0])
             md5.update(self.connection_parms['password'])
-            self.check_response(self.send2cli("APOP "+self.connection_parms['user']+" "+md5.hexdigest()), "APOP")
+            self.check_response(self.send2cli("APOP " + self.connection_parms['user'] + " " + md5.hexdigest()), "APOP")
         elif self.connection_parms['webuser_login']:
             pass
-            self.check_response(self.send2cli("AUTH WEBUSER " + self.connection_parms['user'] + " " + self.connection_parms['password']), "AUTH WEBUSER")
+            self.check_response(self.send2cli(
+                "AUTH WEBUSER " + self.connection_parms['user'] + " " + self.connection_parms['password']),
+                "AUTH WEBUSER")
         else:
             if self.send2cli("USER " + self.connection_parms['user'])[0] != self.CLI_CODE['PASSWORD']:
                 sys.stderr.write("USER response code is not PASSWORD")
@@ -84,11 +86,10 @@ class Cli:
         except AttributeError:
             pass
 
-
     def getclicode(self, response):
         return re.findall('^(\d+)', response)[0]
 
-    def getclimessage(self,response):
+    def getclimessage(self, response):
         return re.search('^(\d+) (.*)\\r', response).group(2)
 
     def send2cli(self, command):
@@ -98,7 +99,7 @@ class Cli:
             sys.stderr.write("send2cli <" + command + "> failed")
             sys.exit()
         result = self.sock.recv(1024)
-        return (self.getclicode(result),result)
+        return (self.getclicode(result), result)
 
     def check_response(self, response, module):
         if response[0] != self.CLI_CODE['OK']:
@@ -110,22 +111,64 @@ class Cli:
             sys.stderr.write(module + " response code is " + response[0])
             sys.exit(1)
 
-####################################################################
-#    Account commands
-####################################################################
+    ####################################################################
+    #    Account commands
+    ####################################################################
 
     def ListDomainObjects(self, domain_name, limit, filter="", what="", cookie=""):
-        commandline = "ListDomainObjects "+domain_name
+        commandline = "ListDomainObjects " + domain_name
         if filter != "":
-            commandline += " FILTER "+ filter
-        commandline +=  " " + str(limit)
+            commandline += " FILTER " + filter
+        commandline += " " + str(limit)
         if what != "":
             commandline += " " + what
         if cookie != "":
-            commandline += " COOKIE "+ cookie
-        #pprint(commandline)
-        result = self.send2cli(commandline)
-        self.check_response_inline(result,"ListDomainObjects")
-        res=()
-        res = self.getclimessage(result[1])
-        pprint(res)
+            commandline += " COOKIE " + cookie
+        response = self.send2cli(commandline)
+        self.check_response_inline(response, "ListDomainObjects")
+        tmp = re.search('\((.*)\)', self.getclimessage(response[1])).group(1).split(",")
+        result = {}
+        result["accounts"] = tmp[0]
+        result["forwarders"] = tmp[-1]
+        result["aliaces"] = tmp[-2]
+        result["Objects"] = re.search('\{(.*)\}', self.getclimessage(response[1])).group(1).split(";")
+        return result
+
+    def ListAccounts(self, domain_name):
+        commandline = "ListAccounts " + domain_name
+        response = self.send2cli(commandline)
+        self.check_response_inline(response, "ListAccounts")
+        tmp = re.search('{(.*)}', self.getclimessage(response[1])).group(1).split(";")
+        tmp.remove('')
+        result = {y[0]: y[1] for y in [x.split("=") for x in tmp]}
+        return result
+
+    def ListDomainTelnums(self, domain_name, limit, filter=""):
+        commandline = "ListDomainTelnums " + domain_name
+        if filter != "":
+            commandline += " FILTER " + filter
+        commandline += " " + str(limit)
+        response = self.send2cli(commandline)
+        self.check_response_inline(response, "ListDomainTelnums")
+        tmp = re.search('{(.*)}', self.getclimessage(response[1])).group(1).split(";")
+        tmp.remove('')
+        result = {}
+        result["count"] = (tmp.pop(0).split("=")[1])
+        result.update({y[0]: y[1] for y in [x.split("=") for x in tmp]})
+        return result
+
+    def CreateAccount(self, account_name, account_domain="", account_settings={}, account_type="", account_storage="",
+                      legacy=False):
+        commandline = "CreateAccount " + account_name
+        if account_domain != "":
+            commandline += '@' + account_domain
+        if account_type != "":
+            commandline += ' ' + account_type
+        if account_storage != '':
+            commandline += ' PATH ' + account_storage
+        if legacy:
+            commandline += ' LEGACY'
+        commandline += ' {' + ";".join(["%s=\"%s\"" % (k, v) for k, v in account_settings.items()]) + ';}'
+        response = self.send2cli(commandline)
+        self.check_response(response, "CreateAccount")
+        return True

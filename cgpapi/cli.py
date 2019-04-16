@@ -6,6 +6,7 @@ import socket
 import ssl
 import re
 import hashlib
+import struct
 from pprint import pprint
 
 
@@ -95,14 +96,23 @@ class Cli:
     def __getclimessage(self, response):
         return re.search('^(\d+) (.*)\\r', response).group(2)
 
-    def __send2cli(self, command):
+    def __send2cli(self, command, buffer_size=1024):
         try:
             self.sock.sendall(bytes(command + "\r\n"))
         except socket.error:
             sys.stderr.write("send2cli <" + command + "> failed")
             sys.exit()
-        result = self.sock.recv(1024)
+        result = self.__recvall(self.sock,buffer_size)
         return (self.__getclicode(result), result)
+
+    def __recvall(self, sock, n):
+        data = b''
+        packet = sock.recv(n)
+        data += packet
+        while '\n' not in packet:
+            packet = sock.recv(n)
+            data += str(packet)
+        return data
 
     def __check_response(self, response, module):
         if response[0] != self.CLI_CODE['OK']:

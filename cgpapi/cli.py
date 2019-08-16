@@ -32,7 +32,25 @@ class Cli:
         'timeout': 60 * 5 - 5
     }
 
-    def __init__(self, connection_parms, default_domain=""):
+    def __init__(self, connection_parms, default_domain="", verbose=0):
+        """
+        Class initialization
+        :param connection_parms: List of parameter for connection.
+            Required parameters:
+                user
+                password
+            Optional parameters(has deafult values):
+                host
+                port
+                ssl_transport
+                secure_login
+                webuser_login
+                timeout
+        :param default_domain: domain in which you prefer to find users, get or change domain parameters.
+        :param verbose: Verbosity level of output. At a moment it has two values - 0 and 1,
+            and affects only on command response of CLI(just code ore code and message).
+        """
+        self.verbose = verbose
         self.default_domain = default_domain
         try:
             self.connection_parms['user'] = connection_parms['user']
@@ -47,6 +65,7 @@ class Cli:
         self.connection_parms.update(connection_parms)
         if self.connection_parms['secure_login'] and self.connection_parms['webuser_login']:
             sys.stderr.write("You should enable only one of <secure_login> and <webuser_login>")
+            # Only one of login (secure or webuser) can be defined.
             exit(1)
         try:
             self.sock = socket.socket()
@@ -83,6 +102,7 @@ class Cli:
         self.__check_response(self.__send2cli("INLINE"), "INLINE")
 
     def __del__(self):
+        """Class destructor. Closes socket."""
         try:
             self.sock.close()
         except AttributeError:
@@ -91,12 +111,33 @@ class Cli:
 
 
     def __getclicode(self, response):
+        """
+        Gets CLI code of command response.
+        :param response: response message from CLI.
+        :return:
+        """
+        """
+            Getting CLI code of command response.
+                response - response message from CLI.
+            Returns string.
+        """
         return re.findall('^(\d+)', response)[0]
 
     def __getclimessage(self, response):
+        """
+        Gets CLI message of command response.
+        :param response: response - response message from CLI.
+        :return: string
+        """
         return re.search('^(\d+) (.*)\\r', response).group(2)
 
     def __send2cli(self, command, buffer_size=1024):
+        """
+        Sends command to CLI.
+        :param command: command whicj you whant to send.
+        :param buffer_size: size of buffer for getting data from socket(default: 1024).
+        :return: list.
+        """
         try:
             self.sock.sendall(bytes(command + "\r\n"))
         except socket.error:
@@ -106,48 +147,113 @@ class Cli:
         return (self.__getclicode(result), result)
 
     def __recvall(self, sock, n):
+        """
+        Receivs all values from socket.
+        :param sock: socket object.
+        :param n: size of portion for getting data from socket.
+        :return: string.
+        """
         data = b''
         packet = sock.recv(n)
         data += packet
         while '\n' not in packet:
+            # Data from socket ends with '\n'
             packet = sock.recv(n)
             data += str(packet)
         return data
 
     def __check_response(self, response, module):
+        """
+        Checks response from CLI. Exits if status code is not OK.
+        :param response: list received from __send2cli.
+        :param module: calling function name(e.g. ListDomainObjects).String.
+        :return:
+        """
+        if self.verbose == 0:
+            response_result = response[0]
+        else:
+            response_result = response[1]
         if response[0] != self.CLI_CODE['OK']:
-            sys.stderr.write(module + " response code is " + response[0])
+            sys.stderr.write(module + " response code is " + response_result)
             sys.exit(1)
 
     def __check_response_inline(self, response, module):
+        """
+        Checks response from CLI for INLINE. Exits if status code is not OK_INLINE.
+        :param response: list received from __send2cli.
+        :param module: calling function name(e.g. ListDomainObjects).String.
+        :return:
+        """
+        if self.verbose == 0:
+            response_result = response[0]
+        else:
+            response_result = response[1]
         if response[0] != self.CLI_CODE['OK_INLINE']:
             sys.stderr.write(module + " response code is " + response[0])
             sys.exit(1)
 
     def __setdefaultdomain(self,domain_name):
+        """
+        Sets defult domain for commands.
+        :param domain_name: name of target domain.
+        :return: string.
+        """
         if domain_name == "":
             domain_name = self.default_domain
         return domain_name
 
     def __setdefaultdomainaddress(self,domain_name):
+        """
+        Sets default domain with leading '@'
+        :param domain_name: name of target domain.
+        :return: string.
+        """
         domain_name = self.__setdefaultdomain(domain_name)
         if domain_name != "":
             domain_name = "@" + domain_name
         return domain_name
 
     def __parse_response(self, response):
-        tmp = re.search('\{(.*)\}', self.__getclimessage(response)).group(1).split(";")
-        tmp.remove('')
-        result = {}
-        for val in tmp:
-            result[val.split("=")[0]] = val.split("=")[1]
+        """
+        Parses response from CLI. Depending on the return string it returns list or dict.
+        If return parameters in round brackets ('()') method returns list, and if parameters in braces('{}')
+        it returns dict.
+        :param response: response message from CLI.
+        :return: dict or list.
+        """
+        if re.search('\{(.*)\}',self.__getclimessage(response)) != None:
+            tmp = re.search('[\{\(](.*)[\}\)]', self.__getclimessage(response)).group(1).split(";")
+            if '' in tmp:
+                tmp.remove('')
+            result = {}
+            for val in tmp:
+                result[val.split("=")[0]] = val.split("=")[1]
+        if re.search('\((.*)\)',self.__getclimessage(response)) != None:
+            tmp = re.search('[\{\(](.*)[\}\)]', self.__getclimessage(response)).group(1).split(",")
+            if '' in tmp:
+                tmp.remove('')
+            result = tmp
         return result
 
     def __convert_param(self, param):
-        result = "{"
-        for value in param.items():
-            result += value[0] + "=" + value[1] + ";"
-        result += "}"
+        """
+        Converts input parameters for methods into string from list or dict.
+        If parameter is list method wraps result in round brackets ('()').
+        If parameter is dict method wraps result in braces ('{}').
+        :param param:
+        :return: string.
+        """
+        if type(param) == list:
+            result = "("
+            for value in param:
+                result +=value + ","
+            result = result[0:-1]
+            result += ")"
+        if type(param) == dict:
+            result = "{"
+            for value in param.items():
+                result += value[0] + "=" + value[1] + ";"
+            result += "}"
         return result
 
     ####################################################################
@@ -155,6 +261,15 @@ class Cli:
     ####################################################################
 
     def ListDomainObjects(self, limit, domain_name="", filter="", what="", cookie=""):
+        """
+        Gets the list of domains.
+        :param limit: limit of processing object to list(integer).
+        :param domain_name: optional name of target domain.
+        :param filter: optional parameter specifies a filter string: only objects with names including this string as a substring are listed.
+        :param what: optionsl keywords specify which Domain objects should be listed(ACCOUNTS, ALIASES, FORWARDERS).
+        :param cookie: ptional parameter specifies a "cookie" string.
+        :return:
+        """
         domain_name = self.__setdefaultdomain(domain_name)
         commandline = "ListDomainObjects " + domain_name
         if filter != "":
@@ -243,6 +358,13 @@ class Cli:
         self.__check_response_inline(response, "GetAccountSettings")
         return self.__parse_response(response[1])
 
+    def GetAccountEffectiveSettings(self, account_name, domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "GetAccountEffectiveSettings " + account_name + domain_name
+        response = self.__send2cli(commandline)
+        self.__check_response_inline(response, "GetAccountEffectiveSettings")
+        return self.__parse_response(response[1])
+
     def UpdateAccountSettings(self, account_name, new_settings,domain_name=""):
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "UpdateAccountSettings " + account_name + domain_name + " " + self.__convert_param(new_settings)
@@ -250,3 +372,71 @@ class Cli:
         self.__check_response(response, "UpdateAccountSettings")
         return True
 
+    def SetAccountSettings(self, account_name, new_settings,domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "SetAccountSettings " + account_name + domain_name + " " + self.__convert_param(new_settings)
+        response = self.__send2cli(commandline)
+        self.__check_response(response, "SetAccountSettings")
+        return True
+
+    def SetAccountPassword(self, account_name, new_password,domain_name="", check=False, method=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "SetAccountPassword " + account_name + domain_name + " PASSWORD " + new_password
+        if method != "":
+            commandline += " METHOD " + method
+        if check:
+            commandline += " CHECK"
+        response = self.__send2cli(commandline)
+        self.__check_response(response, "SetAccountPassword")
+        return True
+
+    def VerifyAccountPassword(self, account_name, password,domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "VerifyAccountPassword " + account_name + domain_name + " PASSWORD " + password
+        response = self.__send2cli(commandline)
+        self.__check_response(response, "VerifyAccountPassword")
+        return True
+
+    def GetAccountAliases(self, account_name, domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "GetAccountAliases " + account_name + domain_name
+        response = self.__send2cli(commandline)
+        self.__check_response_inline(response, "GetAccountAliases")
+        return self.__parse_response(response[1])
+
+    def SetAccountAliases(self, account_name, new_aliases,domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "SetAccountAliases " + account_name + domain_name + " " + self.__convert_param(new_aliases)
+        response = self.__send2cli(commandline)
+        self.__check_response(response, "SetAccountAliases")
+        return True
+
+    def GetAccountTelnums(self, account_name, domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "GetAccountTelnums " + account_name + domain_name
+        response = self.__send2cli(commandline)
+        self.__check_response_inline(response, "GetAccountTelnums")
+        return self.__parse_response(response[1])
+
+    def SetAccountTelnums(self, account_name, new_telnums,domain_name=""):
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "SetAccountTelnums " + account_name + domain_name + " " + self.__convert_param(new_telnums)
+        response = self.__send2cli(commandline)
+        self.__check_response(response, "SetAccountTelnums")
+        return True
+
+    def GetAccountMailRules(self, account_name, domain_name=""):
+        """In progress. Need to convert to covenient dict."""
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "GetAccountMailRules " + account_name + domain_name
+        response = self.__send2cli(commandline)
+        self.__check_response_inline(response, "GetAccountMailRules")
+        return self.__parse_response(response[1])
+
+    def SetAccountMailRules(self, account_name, new_mailrules,domain_name=""):
+        """In progress. Need to convert to covenient dict."""
+        domain_name = self.__setdefaultdomainaddress(domain_name)
+        commandline = "SetAccountMailRules " + account_name + domain_name + " " + self.__convert_param(new_mailrules)
+        #response = self.__send2cli(commandline)
+        #self.__check_response(response, "SetAccountMailRules")
+        return True

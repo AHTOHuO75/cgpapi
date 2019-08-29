@@ -262,7 +262,7 @@ class Cli:
 
     def ListDomainObjects(self, limit, domain_name="", filter="", what="", cookie=""):
         """
-        Gets the list of domains.
+        Gets the list of domain objects.
         :param limit: limit of processing object to list(integer).
         :param domain_name: optional name of target domain.
         :param filter: optional parameter specifies a filter string: only objects with names including this string as a substring are listed.
@@ -290,6 +290,11 @@ class Cli:
         return result
 
     def ListAccounts(self, domain_name=""):
+        """
+        Gets list of Accounts in the Domain.
+        :param domain_name: optional name of target domain.
+        :return: dict.
+        """
         domain_name = self.__setdefaultdomain(domain_name)
         commandline = "ListAccounts " + domain_name
         response = self.__send2cli(commandline)
@@ -302,6 +307,13 @@ class Cli:
         return result
 
     def ListDomainTelnums(self, limit, domain_name="", filter=""):
+        """
+        Reads Telnum numbers created in the specified Domain.
+        :param limit: the maximum number of Telnum numbers to return.
+        :param domain_name: optional name of target domain.
+        :param filter: if this optional parameter is specified, only the telnum numbers containing the specified string are returned.
+        :return: dict.
+        """
         domain_name = self.__setdefaultdomain(domain_name)
         commandline = "ListDomainTelnums " + domain_name
         if filter != "":
@@ -313,6 +325,21 @@ class Cli:
 
     def CreateAccount(self, account_name, domain_name="", account_settings={}, account_type="", account_storage="",
                       legacy=False):
+        """
+        Creates Account.
+        :param account_name: string.
+        :param domain_name: optional parameter, which specifies Domain for Account.
+        :param account_settings: dict - specifies the initial Account settings.
+                                 Account is created using the settings specified in the Account Template for the target Domain.
+                                 If the settings parameter is specified, it is used to modify the Template settings.
+        :param account_type: optional parameter specifies the type of the Account to create.
+                             (MultiMailbox | TextMailbox | MailDirMailbox | SlicedMailbox | AGrade | BGrade | CGrade)
+                             If no Account type is specified a MultiMailbox-type Account is created.
+        :param account_storage: optional parameter specifies the "storage mount Point" directory for the Account data
+                                (the name should be specified without the .mnt suffix).
+        :param legacy: optional flag tells the system to create an Account with a Legacy (visible for legacy mailers) INBOX.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "CreateAccount " + account_name
         commandline += domain_name
@@ -328,6 +355,13 @@ class Cli:
         return True
 
     def RenameAccount(self, old_account_name, new_account_name, domain_name=""):
+        """
+        Renames target Account.
+        :param old_account_name: name of an existing Account.
+        :param new_account_name: new Account name.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "RenameAccount " + old_account_name + domain_name + " into " + new_account_name + domain_name
         response = self.__send2cli(commandline)
@@ -335,6 +369,12 @@ class Cli:
         return True
 
     def DeleteAccount(self, account_name, domain_name=""):
+        """
+        Deletes target Account.
+        :param account_name: parameter specifies the name of an existing Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "DeleteAccount " + account_name + domain_name
         response = self.__send2cli(commandline)
@@ -342,6 +382,14 @@ class Cli:
         return True
 
     def SetAccountType(self, account_name, account_type, domain_name=""):
+        """
+        Sets Account type.
+        :param account_name: specifies the name of an existing Account.
+        :param account_type: parameter specifies the new Account type.
+                             (MultiMailbox | AGrade | BGrade | CGrade)
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: true.
+        """
         if domain_name == "":
             domain_name = self.default_domain
         if domain_name != "":
@@ -352,6 +400,12 @@ class Cli:
         return True
 
     def GetAccountSettings(self, account_name, domain_name=""):
+        """
+        Gets the Account settings.
+        :param account_name: specifies the name of an existing Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: list.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "GetAccountSettings " + account_name + domain_name
         response = self.__send2cli(commandline)
@@ -359,6 +413,12 @@ class Cli:
         return self.__parse_response(response[1])
 
     def GetAccountEffectiveSettings(self, account_name, domain_name=""):
+        """
+        Gets the Account effective settings.
+        :param account_name: specifies the name of an existing Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: list.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "GetAccountEffectiveSettings " + account_name + domain_name
         response = self.__send2cli(commandline)
@@ -366,6 +426,16 @@ class Cli:
         return self.__parse_response(response[1])
 
     def UpdateAccountSettings(self, account_name, new_settings,domain_name=""):
+        """
+        Updates the Account settings.
+        :param account_name: specifies the name of an existing Account.
+        :param new_settings: dict is used to update the Account settings dictionary.
+                             It does not have to contain all settings data, the omitted settings will be left unmodified.
+                             If a new setting value is specified as the string default, the Account setting value is removed,
+                             so the default Account setting value will be used.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "UpdateAccountSettings " + account_name + domain_name + " " + self.__convert_param(new_settings)
         response = self.__send2cli(commandline)
@@ -373,6 +443,14 @@ class Cli:
         return True
 
     def SetAccountSettings(self, account_name, new_settings,domain_name=""):
+        """
+        Sets the Account settinga.
+        :param account_name: specifies the name of an existing Account.
+        :param new_settings: dictionary is used to replace the Account settings dictionary.
+                             All old Account settings are removed.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "SetAccountSettings " + account_name + domain_name + " " + self.__convert_param(new_settings)
         response = self.__send2cli(commandline)
@@ -380,6 +458,23 @@ class Cli:
         return True
 
     def SetAccountPassword(self, account_name, new_password,domain_name="", check=False, method=""):
+        """
+        Sets or updates the Account password.
+        :param account_name: specifies the name of an existing Account.
+        :param new_password: string specifies the new Account password.
+                             The new password will be stored using the effective Password Encryption setting of the target Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :param check: optional boolean parameter with default value "false".
+                      Any user can modify her own Account password.
+                      In this case, or when the check is true , the operation succeeds only if the the supplied password
+                      matches the size and complexity restrictions and the Account CanModifyPassword effective Setting is enabled.
+        :param method: optional string parameter specifies the Account Access Mode.
+                       If this mode is "SIP", the the Alternative SIP Password Setting is modified,
+                       if this mode is RADIUS, then the Alternative RADIUS Password Setting is modified.
+                       In all other cases, the CommuniGate Password setting is modified.
+                       The new password will be stored using the effective Password Encryption setting of the target Account.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "SetAccountPassword " + account_name + domain_name + " PASSWORD " + new_password
         if method != "":
@@ -391,6 +486,13 @@ class Cli:
         return True
 
     def VerifyAccountPassword(self, account_name, password,domain_name=""):
+        """
+        Veryfies the Account password.
+        :param account_name: specifies the name of an existing Account.
+        :param password: string is used to specify the password to check (in the clear text format).
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: true.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "VerifyAccountPassword " + account_name + domain_name + " PASSWORD " + password
         response = self.__send2cli(commandline)
@@ -398,6 +500,12 @@ class Cli:
         return True
 
     def GetAccountAliases(self, account_name, domain_name=""):
+        """
+        Gets the Account aliases.
+        :param account_name: specifies the name of an existing Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: list.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "GetAccountAliases " + account_name + domain_name
         response = self.__send2cli(commandline)
@@ -405,6 +513,13 @@ class Cli:
         return self.__parse_response(response[1])
 
     def SetAccountAliases(self, account_name, new_aliases,domain_name=""):
+        """
+        Sets the Account aliases.
+        :param account_name: specifies the name of an existing Account.
+        :param new_aliases: list.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return:
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "SetAccountAliases " + account_name + domain_name + " " + self.__convert_param(new_aliases)
         response = self.__send2cli(commandline)
@@ -412,6 +527,12 @@ class Cli:
         return True
 
     def GetAccountTelnums(self, account_name, domain_name=""):
+        """
+        Gets the Account telephone numbers.
+        :param account_name: specifies the name of an existing Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: list.
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "GetAccountTelnums " + account_name + domain_name
         response = self.__send2cli(commandline)
@@ -419,6 +540,13 @@ class Cli:
         return self.__parse_response(response[1])
 
     def SetAccountTelnums(self, account_name, new_telnums,domain_name=""):
+        """
+        Sets the Account telephone numbers.
+        :param account_name: specifies the name of an existing Account.
+        :param new_telnums: list. All old numbers assigned to the Account are removed.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return:
+        """
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "SetAccountTelnums " + account_name + domain_name + " " + self.__convert_param(new_telnums)
         response = self.__send2cli(commandline)
@@ -426,7 +554,13 @@ class Cli:
         return True
 
     def GetAccountMailRules(self, account_name, domain_name=""):
-        """In progress. Need to convert to covenient dict."""
+        """
+        Gets the Account incoming mail rules.
+        :param account_name: specifies the name of an existing Account.
+        :param domain_name: optional parameter, which specifies Domain of Account.
+        :return: list or dict.
+        """
+        """In progress. Need to convert to convenient dict."""
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "GetAccountMailRules " + account_name + domain_name
         response = self.__send2cli(commandline)
@@ -434,7 +568,7 @@ class Cli:
         return self.__parse_response(response[1])
 
     def SetAccountMailRules(self, account_name, new_mailrules,domain_name=""):
-        """In progress. Need to convert to covenient dict."""
+        """In progress. Need to convert to convenient dict."""
         domain_name = self.__setdefaultdomainaddress(domain_name)
         commandline = "SetAccountMailRules " + account_name + domain_name + " " + self.__convert_param(new_mailrules)
         #response = self.__send2cli(commandline)
